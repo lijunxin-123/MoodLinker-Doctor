@@ -1,0 +1,13 @@
+.analysisBox{
+    height: 100vh; /* 设置高度为视口高度 */
+}
+.layoutBox{
+    height: 88vh; /* 设置高度为视口高度 */
+  overflow: scroll; /* 防止内容溢出 */
+}
+.headerBox{
+    height: 7vh; /* 设置高度为视口高度 */
+}
+.footerBox{
+    height: 10px; /* 设置高度为视口高度 */
+}
