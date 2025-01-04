@@ -10,6 +10,7 @@ function Login() {
     const navigate = useNavigate();
 
     const handleSubmit = async (values) => {
+        console.log(values)
         try {
             const response = await fetch('http://127.0.0.1:5000/api/doctor_login', {
                 method: 'POST',
@@ -58,7 +59,7 @@ function Login() {
                 >
                     <Form.Item
                         name="username"
-                        label="Username"
+                        label="username"
                         style={{ textAlign: 'left' }} // 使内容靠左对齐
                         rules={[{ required: true, message: 'Please input your username!' }]}
                     >
@@ -67,7 +68,7 @@ function Login() {
 
                     <Form.Item
                         name="password"
-                        label="Password"
+                        label="password"
                         style={{ textAlign: 'left' }} // 使内容靠左对齐
                         rules={[{ required: true, message: 'Please input your password!' }]}
                     >
@@ -93,7 +94,7 @@ function Login() {
                     <div className="register-link">
                     <h6>如果你还没有账户?</h6>
                     <Button style={{marginRight:"-10px",backgroundColor: "#7EA42D", color:"white"}} type="link" onClick={() => navigate('/register')}>
-                        Register
+                        注册
                     </Button>
                     </div>
                     </div>

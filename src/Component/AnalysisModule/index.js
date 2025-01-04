@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import './AnalysisModule.css'; // 导入 CSS 文件
 import { useDispatch, useSelector } from 'react-redux';
 import { changeChooseNumber } from '../../store/stageSlice';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -11,13 +11,21 @@ import {
   BarChartOutlined,
   MailOutlined,
   SettingOutlined,
-  PlusOutlined
+  PlusOutlined,
+  MessageOutlined,
+  UserAddOutlined
 } from '@ant-design/icons';
 import { Button, ConfigProvider, FloatButton, Layout, Menu, theme} from 'antd';
 import QuickReview from './QuickReview';
+import PatientManagement from './PatientManagement';
+import MailBoxModule from '../MailBoxModule';
+import NewEmail from '../MailBoxModule/NewEmail';
+import MySetting from '../MySetting';
+import NewPatient from './NewPatient';
 const { Header, Sider, Content,Footer  } = Layout;
 
 function AnalysisModule(){
+    const pageNumber=useSelector((store) => store.stage.analysisNumber);
     const [collapsed, setCollapsed] = useState(false);
     const {
       token: { colorBgContainer, borderRadiusLG },
@@ -31,16 +39,22 @@ function AnalysisModule(){
             case '1':
                 return <QuickReview />;
             case '2':
-                // return <PatientManagement />;
+                return <PatientManagement />;
             case '3':
-                // return <MessageCenter />;
+                return <MailBoxModule/>;
             case '4':
-                // return <PersonalSettings />;
+                return <MySetting/>;
+            case '5':
+                return <NewEmail selectedPerson={null}/>;
+            case '6':
+                return <NewPatient/>;
             default:
                 return <div>请选择一个选项</div>;
         }
     };
-
+    useEffect(()=>{
+        setSelectedKey(pageNumber)
+    },[pageNumber])
     return (
         
         <ConfigProvider
@@ -128,7 +142,25 @@ function AnalysisModule(){
                     },
                     ]}
                 />
-                <FloatButton icon={<PlusOutlined />} tooltip={<div>添加个案</div>} placement="left" style={{position:"absolute",left:"10px"}}/>
+                <FloatButton.Group
+                trigger="click"
+                shape='circle'
+                style={{position:"absolute",left:'-55%',bottom:"10px"}}
+                icon={<PlusOutlined />}
+                >
+                <FloatButton icon={<UserAddOutlined />} 
+                onClick={(event)=>{
+                    setSelectedKey('6')
+                }}
+                tooltip={<div>添加个案</div>} />
+                <FloatButton icon={<MessageOutlined  />} 
+                onClick={(event)=>{
+                    setSelectedKey('5')
+                }}
+                tooltip={<div>新建消息</div>} style={{marginTop:"-3%"}}
+                />
+                </FloatButton.Group>
+               
                 </ConfigProvider>
                 </Sider>
                 <Layout>

@@ -1,0 +1,55 @@
+.moodDetailBox{
+    display: flex;
+    height: 100%;
+    justify-content: space-around;
+}
+.weatherBox,.moodBox,.dairyBox{
+    display: flex;
+}
+.weatherBox{
+    margin-top: 2%;
+    height: 20%;
+    flex-direction: column;
+
+    align-items: start;
+}
+.moodBox{
+    flex-direction: column;
+    height: 30%;
+    width: 100%;
+}
+.dairyBox{
+    border: 3px solid green;
+    height: 40%;
+    box-shadow: 10px 10px 10px rgba(0, 0, 0, 0.2); /* 添加阴影 */
+    overflow: scroll;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+}
+.leftBox{
+    height: 100%;
+    width: 40%;
+}
+.rightBox{
+    width: 55%;
+    height: 100%;
+}
+.otherDataBox{
+    height: 90%;
+    display: flex;
+    flex-wrap: wrap; /* 允许换行 */
+    gap:7%; /* 设置圆形框之间的间距 */
+    justify-content: center; /* 水平方向居中对齐 */
+    align-items: center;
+}
+.circle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%; /* 使元素变成圆形 */
+    text-align: center; /* 文本居中 */
+    font-size: 14px; /* 设置字体大小 */
+    font-weight: bold; /* 加粗文字 */
+    flex-direction: column;
+}

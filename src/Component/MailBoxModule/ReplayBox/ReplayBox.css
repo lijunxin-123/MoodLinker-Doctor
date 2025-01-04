@@ -1,0 +1,28 @@
+.inBox1{
+    background-color: white;
+    height:200px;
+    width: 50%;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    border-radius: 10px;
+    border: 3px solid #99AC71;
+    margin-top: 2%;
+}
+.inBox2{
+    background-color: #99AC71;
+    height:200px;
+    width: 50%;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    border-radius: 10px;
+    
+}
+.sendBox{
+    margin-top: 5%;
+    height:50%;
+    width: 80%;
+    position: relative;
+    border-radius: 10px;
+}

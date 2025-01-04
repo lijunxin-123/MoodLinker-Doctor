@@ -8,21 +8,25 @@ import json
 import requests
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from sqlalchemy import Date
+from sqlalchemy import Date,cast, String
 from datetime import datetime, date, timedelta
 from flask_socketio import SocketIO
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})  # 允许所有路由的 CORS
-socketio = SocketIO(app, cors_allowed_origins="http://localhost:3000")
+# 设置 CORS 允许的源
+CORS(app, resources={r"/*": {"origins": ["http://localhost:3000", "http://localhost:3001"]}})
+
+# 配置 SocketIO 的 CORS
+socketio = SocketIO(app, cors_allowed_origins=["http://localhost:3000", "http://localhost:3001"])
+# 请求频率限制
+
 # 请求频率限制
 limiter = Limiter(
     get_remote_address,
     app=app,
-    default_limits=["10000 per day", "5000 per hour"]
-)
-
+    default_limits=["100000 per day", "50000 per hour"]
+) 
 # 数据库配置（MySQL 示例）
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+mysqlconnector://root:ljx123456@localhost:3306/moodBuilder'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -71,7 +75,8 @@ class Message(db.Model):
     sender_id = db.Column(db.Integer, nullable=False)  # 发送者的 ID
     receiver_id = db.Column(db.Integer, nullable=False)  # 接收者的 ID
     content = db.Column(db.String(255), nullable=False)  # 消息内容
-    message_type = db.Column(db.Integer, nullable=False, default=0)  # 消息类型（0: 病人 -> 医生, 1: 医生 -> 病人）
+    message_type = db.Column(db.Integer, nullable=False, default=0)  # 消息类型（0: 病人 -> 医生, 123: 1:表示医生 -> 病人，后面的数字表示病人发送的message的id）
+
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())  # 发送时间
 
 class Mood(db.Model):
@@ -222,6 +227,45 @@ def register():
     db.session.commit()
     return jsonify({"message": "User registered successfully!"}), 201
 
+@app.route('/api/register_by_doctor', methods=['POST'])
+def register_by_doctor():
+    data = request.get_json()
+    doctor_id = data.get('doctorId')  # 获取医生ID
+    if not doctor_id:
+        return jsonify({"error": "Doctor ID is required"}), 400
+
+    # 检查医生是否存在
+    doctor = Doctor.query.get(doctor_id)
+    if not doctor:
+        return jsonify({"error": "Doctor not found"}), 404
+
+    # 创建新用户
+    hashed_password = bcrypt.generate_password_hash(data['password']).decode('utf-8')
+    new_user = User(
+        username=data['username'],
+        password=hashed_password,
+        email=data['email'],
+        gender=data['gender'],
+        birthdate=data['birthdate']
+    )
+
+    try:
+        # 添加用户到数据库
+        db.session.add(new_user)
+        db.session.flush()  # 获取新用户的ID
+
+        # 将新用户关联到医生
+        doctor.users.append(new_user)
+
+        # 提交更改
+        db.session.commit()
+
+        return jsonify({"message": "User registered successfully and associated with doctor!"}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
 # 登录
 @app.route('/api/login', methods=['POST'])
 def login():
@@ -246,7 +290,7 @@ def get_user_moods(user_id):
     start_date = request.args.get('start_date', date.today().replace(day=1))
     end_date = request.args.get('end_date', date.today())
     
-    moods = Mood.query.filter_by(user_id=user_id).filter(Mood.created_at.between(start_date, end_date)).all()
+    moods = Mood.query.filter_by(user_id=user_id).filter(Mood.created_at.between(start_date, end_date)).order_by(Mood.created_at.asc()).all()
     mood_list = [{"mood": mood.mood, "created_at": mood.created_at} for mood in moods]
     
     return jsonify({"moods": mood_list}), 200
@@ -767,7 +811,7 @@ def get_mood_streak(user_id):
         "mood_records": mood_data
     })
 
-# 查询病人发送的所有消息
+# 查询病人发送的新消息
 @app.route('/api/patient_sent_messages/<int:patient_id>', methods=['GET'])
 def get_patient_sent_messages(patient_id):
     messages = Message.query.filter_by(sender_id=patient_id, message_type=0).all()  # 查询发送者是病人的消息
@@ -786,7 +830,8 @@ def get_patient_sent_messages(patient_id):
 # 查询病人收到的所有消息
 @app.route('/api/patient_received_messages/<int:patient_id>', methods=['GET'])
 def get_patient_received_messages(patient_id):
-    messages = Message.query.filter_by(receiver_id=patient_id, message_type=1).all()  # 查询接收者是病人的消息
+    messages = Message.query.filter_by(receiver_id=patient_id).filter(
+    cast(Message.message_type, String).like('1%')).all()
     messages_data = []
     for message in messages:
         messages_data.append({
@@ -798,6 +843,29 @@ def get_patient_received_messages(patient_id):
             'message_type': message.message_type
         })
     return jsonify(messages_data)
+
+@app.route('/api/doctor_send_messages/<int:message_id>', methods=['GET'])
+def get_doctor_send_messages(message_id):
+    try:
+        # 查询 message_type 为 message_id 的消息
+        message = Message.query.filter_by(message_type=message_id).first()
+
+        if not message:
+            return jsonify({"message": "No reply message found for this ID."}), 404
+
+        # 将查询到的消息对象转为字典，并返回 JSON 格式数据
+        message_data = {
+            "id": message.id,
+            "sender_id": message.sender_id,
+            "receiver_id": message.receiver_id,
+            "content": message.content,
+            "created_at": message.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            "message_type": message.message_type
+        }
+
+        return jsonify(message_data), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # 病人发送消息给医生的接口
@@ -831,6 +899,28 @@ def send_message():
 
     return jsonify({"message": "Message sent successfully"}), 200
 
+# 医生回复消息接口
+@app.route('/api/doctor/send_message', methods=['POST'])
+def doctor_send_message():
+    data = request.get_json()  # 获取传入的 JSON 数据
+    message_id=data.get('message_id')
+    patient_id = data.get('patient_id')
+    message_content = data.get('content')
+    doctor_id=data.get('doctor_id')
+    
+    # 创建消息
+    new_message = Message(
+        sender_id=doctor_id,
+        receiver_id=patient_id,
+        content=message_content,
+        message_type=message_id  # 病人 -> 医生
+    )
+    
+    # 保存消息
+    db.session.add(new_message)
+    db.session.commit()
+
+    return jsonify({"message": "Message sent successfully"}), 200
 
 # 医生登录
 @app.route('/api/doctor_login', methods=['POST'])
@@ -880,7 +970,273 @@ def get_patients(doctor_id):
 
     return jsonify({"doctor_id": doctor_id, "patients": patients_data}), 200
 
+# 查询患者 Ham-D6-SR 得分
+@app.route('/doctor/<int:user_id>/HAM-D6-SR', methods=['GET'])
+def get_user_ham_score(user_id):
+    # 获取当前日期和一周前的日期
+    today = datetime.now().date()
+    one_week_ago = today - timedelta(days=7)
 
+    # 查询该用户最近一周的 MentalData 数据
+    user_records = MentalData.query.filter(
+        MentalData.user_id == user_id,
+        MentalData.created_at >= one_week_ago,
+        MentalData.created_at <= today
+    ).all()
+
+    if not user_records:
+        return jsonify({"message": "No data available for the past week for this user."}), 404
+
+    # 初始化总分数和有效天数
+    total_score = 0
+    valid_days = 0
+
+    # 计算每一天的得分并累加
+    for record in user_records:
+        daily_score = (
+            record.guilt_value +
+            record.sleep_value +
+            record.eating_value +
+            record.body_value +
+            record.mental_value +
+            record.hesitation_value
+        )
+        total_score += daily_score
+        valid_days += 1
+
+    # 如果有效天数为 0，返回错误
+    if valid_days == 0:
+        return jsonify({"message": "No valid data available for the past week."}), 404
+
+    # 计算最近一周的平均得分
+    average_score = total_score / valid_days
+
+    return jsonify({"user_id": user_id, "average_score": round(average_score, 2)}), 200
+
+# 查询患者 Ham-D6-SR 得分
+@app.route('/doctor/<int:user_id>/HAM-D6-SR-All', methods=['GET'])
+def get_user_ham_score_all(user_id):
+    # 获取当前日期和一周前的日期
+    # 获取当前日期和一周前的日期
+    start_date_str = request.args.get('start_date')  # 接受 YYYY-MM-DD 格式的日期
+    end_date_str = request.args.get('end_date')
+
+    # 将字符串转换为日期对象
+    try:
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD.'}), 400
+
+    # 查询该用户最近一周的 MentalData 数据
+    user_records = MentalData.query.filter(
+        MentalData.user_id == user_id,
+        MentalData.created_at >= start_date,
+        MentalData.created_at <= end_date
+    ).all()
+
+    if not user_records:
+        return jsonify({"message": "No data available for the past week for this user."}), 404
+
+    # 初始化总分数和有效天数
+    total_score = 0
+    valid_days = 0
+
+    # 计算每一天的得分并累加
+    for record in user_records:
+        daily_score = (
+            record.guilt_value +
+            record.sleep_value +
+            record.eating_value +
+            record.body_value +
+            record.mental_value +
+            record.hesitation_value
+        )
+        total_score += daily_score
+        valid_days += 1
+
+    # 如果有效天数为 0，返回错误
+    if valid_days == 0:
+        return jsonify({"message": "No valid data available for the past week."}), 404
+
+    # 计算最近一周的平均得分
+    average_score = total_score / valid_days
+
+    return jsonify({"user_id": user_id, "average_score": round(average_score, 2)}), 200
+
+@app.route('/doctor/<int:user_id>/HAM-D6-SR-Range', methods=['GET'])
+def get_user_ham_score_range(user_id):
+    # 获取当前日期和一周前的日期
+    start_date_str = request.args.get('start_date')  # 接受 YYYY-MM-DD 格式的日期
+    end_date_str = request.args.get('end_date')
+
+    # 将字符串转换为日期对象
+    try:
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD.'}), 400
+
+    # 查询该用户最近一周的 MentalData 数据
+    user_records = MentalData.query.filter(
+        MentalData.user_id == user_id,
+        MentalData.created_at >= start_date,
+        MentalData.created_at <= end_date
+    ).all()
+
+    if not user_records:
+        return jsonify({"message": "No data available for the past week for this user."}), 404
+
+    # 初始化总分数和有效天数
+    guilt_score = 0
+    sleep_score = 0
+    eating_score = 0
+    body_score = 0
+    mental_score = 0
+    hesitation_score = 0
+    valid_days = 0
+
+    # 计算每一天的得分并累加
+    for record in user_records:
+        guilt_score += record.guilt_value
+        sleep_score += record.sleep_value
+        eating_score += record.eating_value
+        body_score += record.body_value
+        mental_score += record.mental_value
+        hesitation_score += record.hesitation_value
+        valid_days += 1
+
+    # 如果有效天数为 0，返回错误
+    if valid_days == 0:
+        return jsonify({"message": "No valid data available for the past week."}), 404
+
+    # 计算最近一周的平均得分
+
+    return jsonify({"user_id": user_id, 
+                    "guilt_value":guilt_score/valid_days,
+                    "sleep_value":sleep_score/valid_days,
+                    "eating_value":eating_score/valid_days,
+                    "body_value":body_score/valid_days,
+                    "mental_value":mental_score/valid_days,
+                    "hesitation_value":hesitation_score/valid_days
+                    }), 200
+
+
+@app.route('/doctor/HAM-D6-SR-Each', methods=['GET'])
+def get_user_each_ham_score():
+    # 获取当前日期和一周前的日期
+    user_id = request.args.get('user_id')
+    start_date_str = request.args.get('start_date')  # 接受 YYYY-MM-DD 格式的日期
+    end_date_str = request.args.get('end_date')
+
+    # 查询该用户最近一周的 MentalData 数据
+    user_records = MentalData.query.filter(
+        MentalData.user_id == user_id,
+        MentalData.created_at == start_date_str,
+    )[0]
+
+    if not user_records:
+        return jsonify({"message": "No data available for the past week for this user."}), 404
+
+    return jsonify({"user_id": user_id, 
+                    "guilt_value":user_records.guilt_value,
+                    "sleep_value":user_records.sleep_value,
+                    "eating_value":user_records.eating_value,
+                    "body_value":user_records.body_value,
+                    "mental_value":user_records.mental_value,
+                    "hesitation_value":user_records.hesitation_value
+                    }), 200
+
+# 获得心情得分
+@app.route('/doctor/<int:user_id>/mood-score', methods=['GET'])
+def get_user_mood_score(user_id):
+    # 检查用户是否存在
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"message": "User not found"}), 404
+
+    # 获取当前日期和一周前的日期
+    today = datetime.now().date()
+    one_week_ago = today - timedelta(days=7)
+
+    # 查询用户最近一周的心情记录
+    moods = Mood.query.filter_by(user_id=user_id).filter(
+        Mood.created_at.between(one_week_ago, today)
+    ).all()
+
+    if not moods:
+        return jsonify({"message": "No mood data available for the past week for this user."}), 404
+
+    # 计算总得分和有效记录数
+    total_score = 0
+    valid_days = 0
+
+    for mood in moods:
+        if mood.mood.lower() == "happy":
+            total_score += 1
+        else:
+            total_score -= 1
+        valid_days += 1
+
+    # 如果没有有效记录，返回错误信息
+    if valid_days == 0:
+        return jsonify({"message": "No valid mood data available."}), 404
+
+    # 计算平均得分
+    average_score = total_score / valid_days
+
+    # 返回结果
+    return jsonify({
+        "user_id": user_id,
+        "average_score": round(average_score, 2),
+        "mood_details": [{"mood": mood.mood, "created_at": mood.created_at} for mood in moods]
+    }), 200
+
+
+@app.route('/messages/doctor/<int:doctor_id>', methods=['GET'])
+def get_messages_for_doctor(doctor_id):
+    try:
+        # 查询该医生接收到的所有病人消息（message_type=0表示病人消息）
+        messages = Message.query.filter_by(receiver_id=doctor_id, message_type=0).order_by(Message.created_at.desc()).all()
+        
+        if not messages:
+            return jsonify({"message": "No messages found for this doctor."}), 404
+        
+        new_messages_data = []
+        replyed_messages=[]
+    
+        for message in messages:
+            # 通过 message.id 查找是否有医生的回复
+            reply_message = Message.query.filter(Message.message_type == int(f"1{message.id}")).first()
+
+            # 如果没有找到回复，说明这是一个新消息
+            if not reply_message:
+                new_messages_data.append({
+                    "id": message.id,
+                    "sender_id": message.sender_id,
+                    "content": message.content,
+                    "created_at": message.created_at.strftime('%Y-%m-%d %H:%M:%S')
+                })
+            else:
+                replyed_messages.append({
+                    "id": message.id,
+                    "sender_id": message.sender_id,
+                    "content": message.content,
+                    "created_at": message.created_at.strftime('%Y-%m-%d %H:%M:%S')
+                })
+        
+        # 返回新消息
+        return jsonify({
+            "new_messages": new_messages_data,
+            "replyed_messages":replyed_messages
+        }), 200
+
+    except Exception as e:
+        # 捕获并返回错误信息
+        return jsonify({"error": str(e)}), 500
+
+        
+        
 
 
 
