@@ -1,6 +1,7 @@
 import './MySetting.css'
 import React, { useEffect, useRef,useState } from 'react';
 import * as echarts from 'echarts';
+import GeneralSetting from './GeneralSetting';
 
 
 function MySetting() {
@@ -94,7 +95,7 @@ function MySetting() {
               borderColor: '#fff',
               borderWidth: 2
             },
-            color:['#5470c6','pink'],
+            color:['pink','#5470c6',],
             label: {
               show: false,
               position: 'center'
@@ -155,14 +156,14 @@ function MySetting() {
   }, [femaleNumber]); // Update on moodData or onPointClick change
 
   return (
-    <div style={{ width: '100%', height: '95%' }}>
+    <div style={{ width: '100%', height: '95%',display:"flex" }}>
         <div style={{ width: '50%', height: '100%' }}>
         <h2 style={{fontSize:'25px',marginLeft:"5px",fontWeight:"bold"}}>个案统计：{patientsNumber}</h2>
         <div ref={chartRef1} style={{ width: '90%', height: '50%' }} />
         <div ref={chartRef2} style={{ width: '90%', height: '50%' }} />
 
         </div>
-
+        <GeneralSetting/>
     </div>
   );
 }

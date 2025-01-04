@@ -265,6 +265,45 @@ def register_by_doctor():
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/update_doctor_password', methods=['POST'])
+def update_doctor_password():
+    data = request.get_json()
+
+    # 获取医生ID、旧密码和新密码
+    doctor_id = data.get('doctorId')
+    old_password = data.get('oldPassword')
+    new_password = data.get('newPassword')
+
+    if not doctor_id:
+        return jsonify({"error": "Doctor ID is required"}), 400
+
+    if not old_password:
+        return jsonify({"error": "Old password is required"}), 400
+
+    if not new_password:
+        return jsonify({"error": "New password is required"}), 400
+
+    # 检查医生是否存在
+    doctor = Doctor.query.get(doctor_id)
+    if not doctor:
+        return jsonify({"error": "Doctor not found"}), 404
+
+    # 验证旧密码是否正确
+    if not bcrypt.check_password_hash(doctor.password, old_password):
+        return jsonify({"error": "Old password is incorrect"}), 400
+
+    try:
+        # 哈希新密码并更新医生记录
+        hashed_password = bcrypt.generate_password_hash(new_password).decode('utf-8')
+        doctor.password = hashed_password
+
+        # 提交更改
+        db.session.commit()
+
+        return jsonify({"message": "Doctor password updated successfully!"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
 
 # 登录
 @app.route('/api/login', methods=['POST'])

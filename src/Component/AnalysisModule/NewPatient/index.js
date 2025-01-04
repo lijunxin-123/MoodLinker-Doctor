@@ -29,6 +29,8 @@ function NewPatient() {
                 const result = await response.json();
                 message.success(result.message); // 使用antd的message显示成功提示
                 dispatch(changeAnalysisNumber('2'))
+                localStorage.setItem('chooseNumber', '2'); 
+                navigate('/analysisModule')
             } else {
                 const errorData = await response.json();
                 setError(errorData.message || 'Registration failed');

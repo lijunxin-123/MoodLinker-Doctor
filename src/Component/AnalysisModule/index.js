@@ -13,7 +13,8 @@ import {
   SettingOutlined,
   PlusOutlined,
   MessageOutlined,
-  UserAddOutlined
+  UserAddOutlined,
+  LoginOutlined
 } from '@ant-design/icons';
 import { Button, ConfigProvider, FloatButton, Layout, Menu, theme} from 'antd';
 import QuickReview from './QuickReview';
@@ -30,7 +31,7 @@ function AnalysisModule(){
     const {
       token: { colorBgContainer, borderRadiusLG },
     } = theme.useToken();
-
+    const navigate=useNavigate()
     const [selectedKey, setSelectedKey] = useState('1'); // 跟踪当前选中的菜单项
 
     // 定义不同菜单项对应的内容
@@ -97,6 +98,16 @@ function AnalysisModule(){
             <div style={{ flex: 1, textAlign: 'center', fontSize: '20px',fontWeight:"bold",color:"white" }}>
                 心理健康可视化追踪系统
             </div>
+            <Button
+                type="text"
+                icon={<LoginOutlined />}
+                onClick={() => navigate('/Login')}
+                style={{
+                width: 60,
+                height: 60,
+                }}
+            />
+            
             </Header>
             <Layout className='layoutBox'>
                 <Sider trigger={null} collapsible collapsed={collapsed}>
